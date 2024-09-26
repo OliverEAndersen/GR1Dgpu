@@ -1,0 +1,12 @@
+compile:
+Use my make.inc file
+module load buildenv-gcc/2022a-eb
+module load Amber/22-nsc1-gcccuda-11.4-9.3.0-bare
+export HDF5_DIR=/proj/astro_extreme/olivera/opt/hdf5/HDF5-1.14.4.3-Linux/HDF_Group/HDF5/1.14.4.3
+make
+
+Run:
+interactive -n 1 -c 32 --gpus-per-task=1 -t 60 --reservation=now
+export LD_LIBRARY_PATH=/proj/astro_extreme/olivera/opt/hdf5/HDF5-1.14.4.3-Linux/HDF_Group/HDF5/1.14.4.3/lib
+export OMP_NUM_THREADS=5
+./GR1D

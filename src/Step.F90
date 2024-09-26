@@ -135,27 +135,50 @@ subroutine Step(dts)
 #endif
 
      if (rkindex .eq. 1 ) then
-        do i=ghosts1,n1-1
-           
+     !write(*,*) 'here'
+        ! Offloading the loop to GPU
+        !$omp target teams distribute parallel do &
+        !$omp map(tofrom: q_hat, denergyloss) &
+        !$omp map(to: q_hat_old, flux_diff, gravsource, presssource, coolingsource) 
+        do i = ghosts1, n1 - 1
+          ! rho, D
+          q_hat(i, 1) = q_hat_old(i, 1) + dts * (-flux_diff(i, 1))
+
+          ! rho*v, S
+           q_hat(i, 2) = q_hat_old(i, 2) + dts * (-flux_diff(i, 2) &
+                + gravsource(i, 2) + presssource(i, 2) + coolingsource(i, 2))
+
+          ! energy, tau
+          q_hat(i, 3) = q_hat_old(i, 3) + dts * (-flux_diff(i, 3) &
+                + gravsource(i, 3) + presssource(i, 3) + coolingsource(i, 3))
+          denergyloss(i) = cooling_rk_1 * coolingsource(i, 3) * dts
+
+          ! ye
+          q_hat(i, 4) = q_hat_old(i, 4) + dts * (-flux_diff(i, 4) &
+                + coolingsource(i, 4))
+        end do
+        !$omp end target teams distribute parallel do
+       ! do i=ghosts1,n1-1
+                 
            ! rho,D
-           q_hat(i,1) = q_hat_old(i,1) + dts * ( - flux_diff(i,1) )
+          ! q_hat(i,1) = q_hat_old(i,1) + dts * ( - flux_diff(i,1) )
            
            ! rho*v, S
-           q_hat(i,2) = q_hat_old(i,2) + dts * ( - flux_diff(i,2) &
-                + gravsource(i,2) + presssource(i,2) + &
-                coolingsource(i,2))
+           !q_hat(i,2) = q_hat_old(i,2) + dts * ( - flux_diff(i,2) &
+                !+ gravsource(i,2) + presssource(i,2) + &
+                !coolingsource(i,2))
            
            ! energy, tau
-           q_hat(i,3) = q_hat_old(i,3) + dts * ( - flux_diff(i,3) &
-                + gravsource(i,3) + presssource(i,3) + &
-                coolingsource(i,3))
-           denergyloss(i) = cooling_rk_1*coolingsource(i,3)*dts
+           !q_hat(i,3) = q_hat_old(i,3) + dts * ( - flux_diff(i,3) &
+                !+ gravsource(i,3) + presssource(i,3) + &
+                !coolingsource(i,3))
+           !denergyloss(i) = cooling_rk_1*coolingsource(i,3)*dts
            
            ! ye
-           q_hat(i,4) = q_hat_old(i,4) + dts * ( - flux_diff(i,4) &
-                + coolingsource(i,4))
+           !q_hat(i,4) = q_hat_old(i,4) + dts * ( - flux_diff(i,4) &
+                !+ coolingsource(i,4))
            
-        enddo
+        !enddo
         
         if(do_rotation) then
            do i=ghosts1,n1-1
@@ -176,30 +199,61 @@ subroutine Step(dts)
                   endif
            enddo
         endif
+
+        elseif (rkindex .eq. 2 ) then
+             write(*,*) 'here'
+             ! Offloading the loop to GPU
+             !$omp target teams distribute parallel do &
+             !$omp map(tofrom: q_hat, denergyloss) &
+             !$omp map(to: q_hat_old, flux_diff, gravsource, presssource, coolingsource)
+             do i = ghosts1, n1 - 1
+                 q_hat(i, 1) = (beta_rk * q_hat_old(i, 1) + q_hat(i, 1) &
+                     + dts * (-flux_diff(i, 1))) / alpha_rk
+
+                 q_hat(i, 2) = (beta_rk * q_hat_old(i, 2) + q_hat(i, 2) &
+                     + dts * (-flux_diff(i, 2) &
+                     + gravsource(i, 2) &
+                     + presssource(i, 2) + coolingsource(i, 2))) / alpha_rk
+
+                 q_hat(i, 3) = (beta_rk * q_hat_old(i, 3) + q_hat(i, 3) &
+                     + dts * (-flux_diff(i, 3) &
+                     + gravsource(i, 3) + presssource(i, 3) &
+                     + coolingsource(i, 3))) / alpha_rk
+                 
+                 denergyloss(i) = denergyloss(i) + cooling_rk_2 * &
+                     coolingsource(i, 3) * dts
+
+                 q_hat(i, 4) = (beta_rk * q_hat_old(i, 4) &
+                     + q_hat(i, 4) &
+                     + dts * (-flux_diff(i, 4) &
+                     + coolingsource(i, 4))) / alpha_rk
+             end do
+             !$omp end target teams distribute parallel do
         
-     elseif (rkindex .eq. 2 ) then
-        do i=ghosts1,n1-1
-           q_hat(i,1) = ( beta_rk * q_hat_old(i,1) + q_hat(i,1)  &
-                + dts * ( - flux_diff(i,1) ) ) / alpha_rk
+        
+     !elseif (rkindex .eq. 2 ) then
+        !do i=ghosts1,n1-1
+           !q_hat(i,1) = ( beta_rk * q_hat_old(i,1) + q_hat(i,1)  &
+                !+ dts * ( - flux_diff(i,1) ) ) / alpha_rk
            
-           q_hat(i,2) = ( beta_rk * q_hat_old(i,2) + q_hat(i,2)  &
-                + dts * ( - flux_diff(i,2)    &
-                + gravsource(i,2) & 
-                + presssource(i,2) + coolingsource(i,2)) ) / alpha_rk
+           !q_hat(i,2) = ( beta_rk * q_hat_old(i,2) + q_hat(i,2)  &
+                !+ dts * ( - flux_diff(i,2)    &
+                !+ gravsource(i,2) & 
+                !+ presssource(i,2) + coolingsource(i,2)) ) / alpha_rk
            
-           q_hat(i,3) = ( beta_rk * q_hat_old(i,3) + q_hat(i,3)  &
-                + dts * ( - flux_diff(i,3)    &
-                + gravsource(i,3) + presssource(i,3) + &
-                coolingsource(i,3) ) ) / alpha_rk
-           denergyloss(i) = denergyloss(i) + cooling_rk_2 * &
-                coolingsource(i,3)*dts
+           !q_hat(i,3) = ( beta_rk * q_hat_old(i,3) + q_hat(i,3)  &
+                !+ dts * ( - flux_diff(i,3)    &
+                !+ gravsource(i,3) + presssource(i,3) + &
+                !coolingsource(i,3) ) ) / alpha_rk
+           !denergyloss(i) = denergyloss(i) + cooling_rk_2 * &
+                !coolingsource(i,3)*dts
            
-           q_hat(i,4) = ( beta_rk * q_hat_old(i,4)           &
-                + q_hat(i,4)                            &
-                + dts * ( - flux_diff(i,4)    &
-                + coolingsource(i,4) ) ) / alpha_rk
+           !q_hat(i,4) = ( beta_rk * q_hat_old(i,4)           &
+                !+ q_hat(i,4)                            &
+                !+ dts * ( - flux_diff(i,4)    &
+                !+ coolingsource(i,4) ) ) / alpha_rk
            
-        enddo
+        !enddo
 
         if(do_rotation) then
            do i=ghosts1,n1-1
